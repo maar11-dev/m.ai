@@ -44,6 +44,11 @@ async def enviar_mensaje_whatsapp(numero_destino: str, texto: str) -> None:
         print(f"[whatsapp] Error al enviar mensaje: {e}")
 
 
+async def gestionar_consulta(pregunta: str, numero_remitente: str) -> None:
+    respuesta = f"🔍 Modo consulta detectado. (Próximamente: Motor RAG para buscar: {pregunta})"
+    await enviar_mensaje_whatsapp(numero_remitente, respuesta)
+
+
 @app.get("/")
 async def health_check() -> dict[str, str]:
     return {"status": "activo"}
@@ -87,9 +92,13 @@ async def webhook(request: Request) -> Response:
     numero_remitente: str = mensaje.get("from", "")
     texto: str = mensaje.get("text", {}).get("body") or str(mensaje)
 
+    if texto.startswith("?"):
+        pregunta = texto[1:].strip()
+        await gestionar_consulta(pregunta, numero_remitente)
+        return Response(status_code=200)
+
     nota_id = await insertar_nota(texto)
     print(f"[webhook] Nota #{nota_id} de {numero_remitente}: {texto[:80]}")
-
     await enviar_mensaje_whatsapp(numero_remitente, f"✅ Nota guardada: {texto}")
 
     return Response(status_code=200)
