@@ -23,6 +23,11 @@ async def guardar_nota(texto: str) -> str:
     return id_unico
 
 
+async def borrar_todas_las_notas() -> None:
+    await asyncio.to_thread(index.reset)
+    print("[upstash] Índice reseteado — todas las notas borradas")
+
+
 async def buscar_notas(pregunta: str, n_resultados: int = 10) -> list[str]:
     resultados = await asyncio.to_thread(
         index.query,

@@ -6,7 +6,7 @@ from groq import AsyncGroq
 from fastapi import BackgroundTasks, FastAPI, HTTPException, Request, Response
 from dotenv import load_dotenv
 
-from db_manager import guardar_nota, buscar_notas
+from db_manager import guardar_nota, buscar_notas, borrar_todas_las_notas
 
 # override=True: el .env siempre gana sobre un valor obsoleto ya cargado en
 # os.environ (evita que un token viejo quede cacheado entre recargas).
@@ -89,6 +89,11 @@ _procesados: set[str] = set()
 
 async def procesar_mensaje(texto: str, numero_remitente: str) -> None:
     """Trabajo pesado (Upstash + Groq + envío). Se ejecuta tras devolver el 200."""
+    if texto == "-@":
+        await borrar_todas_las_notas()
+        await enviar_mensaje_whatsapp(numero_remitente, "🗑️ Todas las notas han sido borradas.")
+        return
+
     if texto.startswith("?"):
         await gestionar_consulta(texto[1:].strip(), numero_remitente)
         return
