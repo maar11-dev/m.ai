@@ -8,7 +8,10 @@ from dotenv import load_dotenv
 
 from db_manager import guardar_nota, buscar_notas
 
-load_dotenv()
+# override=True: el .env siempre gana sobre un valor obsoleto ya cargado en
+# os.environ (evita que un token viejo quede cacheado entre recargas).
+# En la nube (Render) no hay .env, así que esto es no-op y mandan sus env vars.
+load_dotenv(override=True)
 
 VERIFY_TOKEN = os.getenv("WHATSAPP_VERIFY_TOKEN", "")
 ACCESS_TOKEN = os.getenv("WHATSAPP_ACCESS_TOKEN", "")
@@ -33,7 +36,10 @@ async def enviar_mensaje_whatsapp(numero_destino: str, texto: str) -> None:
     try:
         async with httpx.AsyncClient() as client:
             resp = await client.post(url, headers=headers, json=payload)
-            print(f"[whatsapp] Respuesta enviada a {numero_destino} → HTTP {resp.status_code}")
+            if resp.status_code != 200:
+                print(f"[whatsapp] Error HTTP {resp.status_code}: {resp.text}")
+            else:
+                print(f"[whatsapp] Respuesta enviada a {numero_destino} → HTTP {resp.status_code}")
     except Exception as e:
         print(f"[whatsapp] Error al enviar mensaje: {e}")
 

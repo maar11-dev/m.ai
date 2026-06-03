@@ -6,7 +6,7 @@ from upstash_vector import Index, Vector
 
 # Carga .env antes de inicializar para que from_env() vea las credenciales,
 # independientemente del orden de importación de los módulos.
-load_dotenv()
+load_dotenv(override=True)
 
 # Cliente global. Lee UPSTASH_VECTOR_REST_URL y UPSTASH_VECTOR_REST_TOKEN del entorno.
 index = Index.from_env()
