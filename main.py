@@ -3,17 +3,19 @@ from contextlib import asynccontextmanager
 from typing import Any
 
 import httpx
+from groq import AsyncGroq
 from fastapi import FastAPI, HTTPException, Request, Response
 from dotenv import load_dotenv
 
 from database import init_db, insertar_nota, obtener_notas, eliminar_nota
-from vector_db import guardar_en_vector
+from vector_db import guardar_en_vector, buscar_en_vector
 
 load_dotenv()
 
 VERIFY_TOKEN = os.getenv("WHATSAPP_VERIFY_TOKEN", "")
 ACCESS_TOKEN = os.getenv("WHATSAPP_ACCESS_TOKEN", "")
 PHONE_ID = os.getenv("WHATSAPP_PHONE_ID", "")
+GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
 
 
 @asynccontextmanager
@@ -46,7 +48,27 @@ async def enviar_mensaje_whatsapp(numero_destino: str, texto: str) -> None:
 
 
 async def gestionar_consulta(pregunta: str, numero_remitente: str) -> None:
-    respuesta = f"🔍 Modo consulta detectado. (Próximamente: Motor RAG para buscar: {pregunta})"
+    notas = await buscar_en_vector(pregunta)
+    contexto = "\n".join(f"- {n}" for n in notas) if notas else "(sin notas relevantes)"
+
+    system_prompt = (
+        "Eres el asistente personal del usuario en WhatsApp. "
+        "Responde a su pregunta utilizando ÚNICAMENTE el siguiente contexto extraído de sus notas: "
+        f"{contexto}. "
+        "Sé directo, conciso y responde en español. "
+        "Si la respuesta no está en el contexto, di que no tienes notas sobre eso."
+    )
+
+    cliente = AsyncGroq(api_key=GROQ_API_KEY)
+    completion = await cliente.chat.completions.create(
+        model="llama3-8b-8192",
+        messages=[
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": pregunta},
+        ],
+    )
+    respuesta = completion.choices[0].message.content or "No se pudo generar respuesta."
+    print(f"[rag] Consulta: {pregunta[:60]} | Contexto: {len(notas)} notas")
     await enviar_mensaje_whatsapp(numero_remitente, respuesta)
 
 

@@ -13,3 +13,13 @@ async def guardar_en_vector(id_nota: str, texto: str) -> None:
         ids=[id_nota],
     )
     print(f"[chroma] Embedding guardado para nota #{id_nota}")
+
+
+async def buscar_en_vector(pregunta: str, n_resultados: int = 3) -> list[str]:
+    resultados = await asyncio.to_thread(
+        notas_collection.query,
+        query_texts=[pregunta],
+        n_results=n_resultados,
+    )
+    documentos: list[str] = resultados.get("documents", [[]])[0]
+    return documentos
