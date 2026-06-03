@@ -2,6 +2,7 @@ import os
 from contextlib import asynccontextmanager
 from typing import Any
 
+import httpx
 from fastapi import FastAPI, HTTPException, Request, Response
 from dotenv import load_dotenv
 
@@ -10,6 +11,8 @@ from database import init_db, insertar_nota, obtener_notas, eliminar_nota
 load_dotenv()
 
 VERIFY_TOKEN = os.getenv("WHATSAPP_VERIFY_TOKEN", "")
+ACCESS_TOKEN = os.getenv("WHATSAPP_ACCESS_TOKEN", "")
+PHONE_ID = os.getenv("WHATSAPP_PHONE_ID", "")
 
 
 @asynccontextmanager
@@ -19,6 +22,26 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(lifespan=lifespan)
+
+
+async def enviar_mensaje_whatsapp(numero_destino: str, texto: str) -> None:
+    url = f"https://graph.facebook.com/v17.0/{PHONE_ID}/messages"
+    headers = {
+        "Authorization": f"Bearer {ACCESS_TOKEN}",
+        "Content-Type": "application/json",
+    }
+    payload = {
+        "messaging_product": "whatsapp",
+        "to": numero_destino,
+        "type": "text",
+        "text": {"body": texto},
+    }
+    try:
+        async with httpx.AsyncClient() as client:
+            resp = await client.post(url, headers=headers, json=payload)
+            print(f"[whatsapp] Respuesta enviada a {numero_destino} → HTTP {resp.status_code}")
+    except Exception as e:
+        print(f"[whatsapp] Error al enviar mensaje: {e}")
 
 
 @app.get("/")
@@ -50,21 +73,23 @@ async def verificar_webhook(request: Request) -> Response:
 async def webhook(request: Request) -> Response:
     payload: dict[str, Any] = await request.json()
 
-    texto = (
+    value = (
         payload.get("entry", [{}])[0]
         .get("changes", [{}])[0]
         .get("value", {})
-        .get("messages", [{}])[0]
-        .get("text", {})
-        .get("body")
-        or payload.get("texto")
-        or payload.get("Body")
-        or payload.get("text")
-        or payload.get("mensaje")
-        or str(payload)
     )
 
+    # Webhooks de estado (entregado, leído, etc.) — ignorar
+    if not value.get("messages"):
+        return Response(status_code=200)
+
+    mensaje = value["messages"][0]
+    numero_remitente: str = mensaje.get("from", "")
+    texto: str = mensaje.get("text", {}).get("body") or str(mensaje)
+
     nota_id = await insertar_nota(texto)
-    print(f"[webhook] Nota #{nota_id} guardada: {texto[:80]}")
+    print(f"[webhook] Nota #{nota_id} de {numero_remitente}: {texto[:80]}")
+
+    await enviar_mensaje_whatsapp(numero_remitente, f"✅ Nota guardada: {texto}")
 
     return Response(status_code=200)
