@@ -216,3 +216,12 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Binario de tunel local y logs de procesos locales
+cloudflared.exe
+cloudflared.log
+cloudflared.err
+uvicorn.log
+uvicorn.err
+server.log
+server.err
