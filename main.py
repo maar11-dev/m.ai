@@ -3,7 +3,7 @@ from typing import Any
 
 import httpx
 from groq import AsyncGroq
-from fastapi import FastAPI, HTTPException, Request, Response
+from fastapi import BackgroundTasks, FastAPI, HTTPException, Request, Response
 from dotenv import load_dotenv
 
 from db_manager import guardar_nota, buscar_notas
@@ -82,8 +82,24 @@ async def verificar_webhook(request: Request) -> Response:
     raise HTTPException(status_code=403, detail="Token inválido")
 
 
+# IDs de mensajes ya procesados, para ignorar reenvíos de Meta (entrega "al
+# menos una vez"). En memoria: basta para una instancia; se vacía al reiniciar.
+_procesados: set[str] = set()
+
+
+async def procesar_mensaje(texto: str, numero_remitente: str) -> None:
+    """Trabajo pesado (Upstash + Groq + envío). Se ejecuta tras devolver el 200."""
+    if texto.startswith("?"):
+        await gestionar_consulta(texto[1:].strip(), numero_remitente)
+        return
+
+    nota_id = await guardar_nota(texto)
+    print(f"[webhook] Nota {nota_id} de {numero_remitente}: {texto[:80]}")
+    await enviar_mensaje_whatsapp(numero_remitente, f"✅ Nota guardada: {texto}")
+
+
 @app.post("/webhook")
-async def webhook(request: Request) -> Response:
+async def webhook(request: Request, background_tasks: BackgroundTasks) -> Response:
     payload: dict[str, Any] = await request.json()
 
     value = (
@@ -92,23 +108,38 @@ async def webhook(request: Request) -> Response:
         .get("value", {})
     )
 
-    # Webhooks de estado (entregado, leído, etc.) — ignorar
-    if not value.get("messages"):
+    mensajes = value.get("messages")
+    # Webhooks de estado (entregado, leído, etc.) o sin mensajes — ignorar.
+    if not mensajes:
         return Response(status_code=200)
 
-    mensaje = value["messages"][0]
+    mensaje = mensajes[0]
+
+    # Solo procesamos mensajes de texto reales. Reacciones, imágenes, stickers,
+    # ubicaciones, etc. llegan por este mismo array y NO son notas que escribió
+    # el usuario: se ignoran (antes el fallback guardaba el evento crudo).
+    if mensaje.get("type") != "text":
+        print(f"[webhook] Ignorado mensaje tipo '{mensaje.get('type')}'")
+        return Response(status_code=200)
+
+    # Anti-duplicado: Meta reenvía el mismo evento si el 200 tarda en llegar.
+    msg_id = mensaje.get("id", "")
+    if msg_id and msg_id in _procesados:
+        print(f"[webhook] Duplicado ignorado: {msg_id}")
+        return Response(status_code=200)
+    if msg_id:
+        if len(_procesados) > 2000:  # cota simple de memoria
+            _procesados.clear()
+        _procesados.add(msg_id)
+
     numero_remitente: str = mensaje.get("from", "")
-    texto: str = mensaje.get("text", {}).get("body") or str(mensaje)
-
-    if texto.startswith("?"):
-        pregunta = texto[1:].strip()
-        await gestionar_consulta(pregunta, numero_remitente)
+    texto: str = (mensaje.get("text", {}).get("body") or "").strip()
+    if not texto:
         return Response(status_code=200)
 
-    nota_id = await guardar_nota(texto)
-    print(f"[webhook] Nota {nota_id} de {numero_remitente}: {texto[:80]}")
-    await enviar_mensaje_whatsapp(numero_remitente, f"✅ Nota guardada: {texto}")
-
+    # Respondemos 200 YA y procesamos en segundo plano: así Meta nunca agota el
+    # tiempo de espera ni reintenta (evita respuestas/notas duplicadas).
+    background_tasks.add_task(procesar_mensaje, texto, numero_remitente)
     return Response(status_code=200)
 
 
