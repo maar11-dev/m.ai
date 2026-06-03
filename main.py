@@ -7,6 +7,7 @@ from fastapi import FastAPI, HTTPException, Request, Response
 from dotenv import load_dotenv
 
 from database import init_db, insertar_nota, obtener_notas, eliminar_nota
+from vector_db import guardar_en_vector
 
 load_dotenv()
 
@@ -98,6 +99,7 @@ async def webhook(request: Request) -> Response:
         return Response(status_code=200)
 
     nota_id = await insertar_nota(texto)
+    await guardar_en_vector(str(nota_id), texto)
     print(f"[webhook] Nota #{nota_id} de {numero_remitente}: {texto[:80]}")
     await enviar_mensaje_whatsapp(numero_remitente, f"✅ Nota guardada: {texto}")
 
