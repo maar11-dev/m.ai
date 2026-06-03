@@ -109,17 +109,25 @@ async def health_check() -> dict[str, str]:
     return {"status": "activo"}
 
 
+async def _enviar_resumen_a(numero: str) -> None:
+    resumen = await generar_resumen_semanal()
+    await enviar_mensaje_whatsapp(numero, resumen)
+
+
 @app.post("/tareas/resumen-semanal")
-async def tarea_resumen_semanal(request: Request) -> dict[str, str]:
+async def tarea_resumen_semanal(
+    request: Request, background_tasks: BackgroundTasks
+) -> dict[str, str]:
     """Endpoint que dispara el cron externo los domingos. Protegido por secreto."""
     if not CRON_SECRET or request.query_params.get("secret") != CRON_SECRET:
         raise HTTPException(status_code=403, detail="No autorizado")
     if not MI_NUMERO:
         raise HTTPException(status_code=500, detail="MI_NUMERO_WHATSAPP no configurado")
 
-    resumen = await generar_resumen_semanal()
-    await enviar_mensaje_whatsapp(MI_NUMERO, resumen)
-    return {"status": "enviado"}
+    # Responde al instante y genera el resumen en segundo plano: así el cron
+    # recibe su 200 enseguida y nunca choca con el límite de 30s de timeout.
+    background_tasks.add_task(_enviar_resumen_a, MI_NUMERO)
+    return {"status": "encolado"}
 
 
 @app.get("/webhook")
