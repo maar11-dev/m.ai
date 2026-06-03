@@ -6,7 +6,12 @@ from groq import AsyncGroq
 from fastapi import BackgroundTasks, FastAPI, HTTPException, Request, Response
 from dotenv import load_dotenv
 
-from db_manager import guardar_nota, buscar_notas, borrar_todas_las_notas
+from db_manager import (
+    guardar_nota,
+    buscar_notas,
+    borrar_todas_las_notas,
+    obtener_notas_semana,
+)
 
 # override=True: el .env siempre gana sobre un valor obsoleto ya cargado en
 # os.environ (evita que un token viejo quede cacheado entre recargas).
@@ -17,6 +22,10 @@ VERIFY_TOKEN = os.getenv("WHATSAPP_VERIFY_TOKEN", "")
 ACCESS_TOKEN = os.getenv("WHATSAPP_ACCESS_TOKEN", "")
 PHONE_ID = os.getenv("WHATSAPP_PHONE_ID", "")
 GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
+# Número propio al que se envía el resumen automático de los domingos.
+MI_NUMERO = os.getenv("MI_NUMERO_WHATSAPP", "")
+# Secreto que protege el endpoint que dispara el cron externo.
+CRON_SECRET = os.getenv("CRON_SECRET", "")
 
 app = FastAPI()
 
@@ -69,9 +78,48 @@ async def gestionar_consulta(pregunta: str, numero_remitente: str) -> None:
     await enviar_mensaje_whatsapp(numero_remitente, respuesta)
 
 
+async def generar_resumen_semanal() -> str:
+    """Resume con Groq las notas más importantes de la última semana."""
+    notas = await obtener_notas_semana(7)
+    if not notas:
+        return "📭 No tienes notas de esta semana."
+
+    listado = "\n".join(f"- {n}" for n in notas)
+    system_prompt = (
+        "Eres el asistente personal del usuario. A partir de sus notas de esta "
+        "semana, redacta un resumen breve en español destacando SOLO las más "
+        "importantes o accionables (recordatorios, tareas, ideas clave). Agrupa "
+        "por temas si tiene sentido, usa viñetas y sé conciso. Ignora lo trivial."
+    )
+    cliente = AsyncGroq(api_key=GROQ_API_KEY)
+    completion = await cliente.chat.completions.create(
+        model="llama-3.1-8b-instant",
+        messages=[
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": f"Mis notas de esta semana:\n{listado}"},
+        ],
+    )
+    cuerpo = completion.choices[0].message.content or "No se pudo generar el resumen."
+    print(f"[resumen] Generado a partir de {len(notas)} notas")
+    return f"🗓️ *Resumen de tu semana*\n\n{cuerpo}"
+
+
 @app.get("/")
 async def health_check() -> dict[str, str]:
     return {"status": "activo"}
+
+
+@app.post("/tareas/resumen-semanal")
+async def tarea_resumen_semanal(request: Request) -> dict[str, str]:
+    """Endpoint que dispara el cron externo los domingos. Protegido por secreto."""
+    if not CRON_SECRET or request.query_params.get("secret") != CRON_SECRET:
+        raise HTTPException(status_code=403, detail="No autorizado")
+    if not MI_NUMERO:
+        raise HTTPException(status_code=500, detail="MI_NUMERO_WHATSAPP no configurado")
+
+    resumen = await generar_resumen_semanal()
+    await enviar_mensaje_whatsapp(MI_NUMERO, resumen)
+    return {"status": "enviado"}
 
 
 @app.get("/webhook")
@@ -92,6 +140,11 @@ async def procesar_mensaje(texto: str, numero_remitente: str) -> None:
     if texto == "-@":
         await borrar_todas_las_notas()
         await enviar_mensaje_whatsapp(numero_remitente, "🗑️ Todas las notas han sido borradas.")
+        return
+
+    if texto == "+rs":
+        resumen = await generar_resumen_semanal()
+        await enviar_mensaje_whatsapp(numero_remitente, resumen)
         return
 
     if texto.startswith("?"):

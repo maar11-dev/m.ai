@@ -23,3 +23,9 @@ services:
         sync: false
       - key: UPSTASH_VECTOR_REST_TOKEN
         sync: false
+      # Tu número (formato internacional sin +) para el resumen de los domingos.
+      - key: MI_NUMERO_WHATSAPP
+        sync: false
+      # Secreto que protege /tareas/resumen-semanal frente a llamadas externas.
+      - key: CRON_SECRET
+        sync: false
