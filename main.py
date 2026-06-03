@@ -61,7 +61,7 @@ async def gestionar_consulta(pregunta: str, numero_remitente: str) -> None:
 
     cliente = AsyncGroq(api_key=GROQ_API_KEY)
     completion = await cliente.chat.completions.create(
-        model="llama3-8b-8192",
+        model="llama-3.1-8b-instant",
         messages=[
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": pregunta},
