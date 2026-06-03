@@ -53,6 +53,7 @@ Para exponer el webhook a Meta en desarrollo, usar Cloudflare Tunnel:
 | `? <pregunta>` | Consulta RAG: busca notas relevantes y responde con IA |
 | `+rs` | Genera un resumen inteligente de las notas de los últimos 7 días |
 | `-@` | Borra todas las notas del índice vectorial |
+| `/help` | Muestra la lista de comandos disponibles |
 
 ## Flujo principal
 

@@ -143,8 +143,22 @@ async def verificar_webhook(request: Request) -> Response:
 _procesados: set[str] = set()
 
 
+HELP_TEXT = (
+    "📋 *Comandos disponibles*\n\n"
+    "• Cualquier texto → guarda una nota\n"
+    "• `? <pregunta>` → consulta tus notas con IA\n"
+    "• `+rs` → resumen inteligente de la semana\n"
+    "• `-@` → borra todas las notas\n"
+    "• `/help` → muestra este mensaje"
+)
+
+
 async def procesar_mensaje(texto: str, numero_remitente: str) -> None:
     """Trabajo pesado (Upstash + Groq + envío). Se ejecuta tras devolver el 200."""
+    if texto == "/help":
+        await enviar_mensaje_whatsapp(numero_remitente, HELP_TEXT)
+        return
+
     if texto == "-@":
         await borrar_todas_las_notas()
         await enviar_mensaje_whatsapp(numero_remitente, "🗑️ Todas las notas han sido borradas.")
