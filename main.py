@@ -1,5 +1,4 @@
 import os
-from contextlib import asynccontextmanager
 from typing import Any
 
 import httpx
@@ -7,8 +6,7 @@ from groq import AsyncGroq
 from fastapi import FastAPI, HTTPException, Request, Response
 from dotenv import load_dotenv
 
-from database import init_db, insertar_nota, obtener_notas, eliminar_nota
-from vector_db import guardar_en_vector, buscar_en_vector
+from db_manager import guardar_nota, buscar_notas
 
 load_dotenv()
 
@@ -17,14 +15,7 @@ ACCESS_TOKEN = os.getenv("WHATSAPP_ACCESS_TOKEN", "")
 PHONE_ID = os.getenv("WHATSAPP_PHONE_ID", "")
 GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
 
-
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    await init_db()
-    yield
-
-
-app = FastAPI(lifespan=lifespan)
+app = FastAPI()
 
 
 async def enviar_mensaje_whatsapp(numero_destino: str, texto: str) -> None:
@@ -48,7 +39,7 @@ async def enviar_mensaje_whatsapp(numero_destino: str, texto: str) -> None:
 
 
 async def gestionar_consulta(pregunta: str, numero_remitente: str) -> None:
-    notas = await buscar_en_vector(pregunta)
+    notas = await buscar_notas(pregunta)
     contexto = "\n".join(f"- {n}" for n in notas) if notas else "(sin notas relevantes)"
 
     system_prompt = (
@@ -75,18 +66,6 @@ async def gestionar_consulta(pregunta: str, numero_remitente: str) -> None:
 @app.get("/")
 async def health_check() -> dict[str, str]:
     return {"status": "activo"}
-
-
-@app.get("/notas")
-async def listar_notas() -> list[dict]:
-    return await obtener_notas()
-
-
-@app.delete("/notas/{nota_id}", status_code=204)
-async def borrar_nota(nota_id: int) -> Response:
-    if not await eliminar_nota(nota_id):
-        raise HTTPException(status_code=404, detail="Nota no encontrada")
-    return Response(status_code=204)
 
 
 @app.get("/webhook")
@@ -120,9 +99,15 @@ async def webhook(request: Request) -> Response:
         await gestionar_consulta(pregunta, numero_remitente)
         return Response(status_code=200)
 
-    nota_id = await insertar_nota(texto)
-    await guardar_en_vector(str(nota_id), texto)
-    print(f"[webhook] Nota #{nota_id} de {numero_remitente}: {texto[:80]}")
+    nota_id = await guardar_nota(texto)
+    print(f"[webhook] Nota {nota_id} de {numero_remitente}: {texto[:80]}")
     await enviar_mensaje_whatsapp(numero_remitente, f"✅ Nota guardada: {texto}")
 
     return Response(status_code=200)
+
+
+if __name__ == "__main__":
+    import uvicorn
+
+    port = int(os.environ.get("PORT", 8000))
+    uvicorn.run("main:app", host="0.0.0.0", port=port)
