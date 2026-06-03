@@ -59,14 +59,25 @@ async def obtener_notas_semana(dias: int = 7) -> list[str]:
 
 
 async def buscar_notas(pregunta: str, n_resultados: int = 10) -> list[str]:
-    resultados = await asyncio.to_thread(
+    # Pedimos más candidatos de los necesarios para poder re-rankear por recencia.
+    candidatos = await asyncio.to_thread(
         index.query,
         data=pregunta,
-        top_k=n_resultados,
+        top_k=n_resultados * 3,
         include_metadata=True,
     )
+
+    ahora = time.time()
+    HALF_LIFE_SEGUNDOS = 90 * 86400  # 30 días → 0.75×, 90+ días → mínimo 0.50×
+
+    def puntuacion(r) -> float:
+        created_at = (r.metadata or {}).get("created_at", ahora)
+        decay = max(1 / (1 + (ahora - created_at) / HALF_LIFE_SEGUNDOS), 0.5)
+        return r.score * decay
+
+    reordenados = sorted(candidatos, key=puntuacion, reverse=True)
     return [
         r.metadata["texto"]
-        for r in resultados
+        for r in reordenados[:n_resultados]
         if r.metadata and "texto" in r.metadata
     ]
