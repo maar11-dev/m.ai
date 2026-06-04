@@ -6,7 +6,7 @@ from fastapi import APIRouter, BackgroundTasks, HTTPException, Request, Response
 from app.config import CRON_SECRET, MI_NUMERO, VERIFY_TOKEN
 from app.db.vector import obtener_notas_con_evento
 from app.services.ai import generar_resumen_semanal
-from app.services.procesador import procesar_mensaje
+from app.services.procesador import procesar_audio, procesar_mensaje
 from app.services.whatsapp import enviar_mensaje_whatsapp
 
 router = APIRouter()
@@ -46,11 +46,12 @@ async def webhook(request: Request, background_tasks: BackgroundTasks) -> Respon
 
     mensaje = mensajes[0]
 
-    # Solo procesamos mensajes de texto reales. Reacciones, imágenes, stickers,
+    # Solo procesamos texto y notas de voz. Reacciones, imágenes, stickers,
     # ubicaciones, etc. llegan por este mismo array y NO son notas que escribió
     # el usuario: se ignoran (antes el fallback guardaba el evento crudo).
-    if mensaje.get("type") != "text":
-        print(f"[webhook] Ignorado mensaje tipo '{mensaje.get('type')}'")
+    tipo = mensaje.get("type")
+    if tipo not in ("text", "audio"):
+        print(f"[webhook] Ignorado mensaje tipo '{tipo}'")
         return Response(status_code=200)
 
     # Anti-duplicado: Meta reenvía el mismo evento si el 200 tarda en llegar.
@@ -64,12 +65,20 @@ async def webhook(request: Request, background_tasks: BackgroundTasks) -> Respon
         _procesados.add(msg_id)
 
     numero_remitente: str = mensaje.get("from", "")
+
+    # Respondemos 200 YA y procesamos en segundo plano: así Meta nunca agota el
+    # tiempo de espera ni reintenta (evita respuestas/notas duplicadas).
+    if tipo == "audio":
+        media_id = mensaje.get("audio", {}).get("id", "")
+        if not media_id:
+            return Response(status_code=200)
+        background_tasks.add_task(procesar_audio, media_id, numero_remitente)
+        return Response(status_code=200)
+
     texto: str = (mensaje.get("text", {}).get("body") or "").strip()
     if not texto:
         return Response(status_code=200)
 
-    # Respondemos 200 YA y procesamos en segundo plano: así Meta nunca agota el
-    # tiempo de espera ni reintenta (evita respuestas/notas duplicadas).
     background_tasks.add_task(procesar_mensaje, texto, numero_remitente)
     return Response(status_code=200)
 

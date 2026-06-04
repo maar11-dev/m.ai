@@ -6,17 +6,34 @@ from app.services.ai import (
     generar_resumen_semanal,
     generar_tags,
     gestionar_consulta,
+    transcribir_audio,
 )
-from app.services.whatsapp import enviar_mensaje_whatsapp
+from app.services.whatsapp import descargar_audio, enviar_mensaje_whatsapp
 
 HELP_TEXT = (
     "📋 *Comandos disponibles*\n\n"
     "• Cualquier texto → guarda una nota\n"
+    "• 🎤 Nota de voz → se transcribe y se guarda\n"
     "• `? <pregunta>` → consulta tus notas con IA\n"
     "• `+rs` → resumen inteligente de la semana\n"
     "• `-@` → borra todas las notas\n"
     "• `/help` → muestra este mensaje"
 )
+
+
+async def procesar_audio(media_id: str, numero_remitente: str) -> None:
+    """Descarga, transcribe y procesa una nota de voz como si fuera texto."""
+    await enviar_mensaje_whatsapp(numero_remitente, "🎤 Audio recibido, transcribiendo...")
+    audio = await descargar_audio(media_id)
+    if not audio:
+        await enviar_mensaje_whatsapp(numero_remitente, "⚠️ No pude descargar el audio. Inténtalo de nuevo.")
+        return
+    texto = await transcribir_audio(audio)
+    if not texto:
+        await enviar_mensaje_whatsapp(numero_remitente, "⚠️ No pude entender el audio. ¿Puedes repetirlo?")
+        return
+    # Reutilizamos toda la lógica de texto: comandos, tags, fechas, guardado.
+    await procesar_mensaje(texto, numero_remitente)
 
 
 async def procesar_mensaje(texto: str, numero_remitente: str) -> None:

@@ -7,6 +7,23 @@ from app.db.vector import buscar_notas, obtener_notas_semana
 from app.services.whatsapp import enviar_mensaje_whatsapp
 
 
+async def transcribir_audio(audio_bytes: bytes) -> str | None:
+    """Transcribe una nota de voz a texto con Whisper (Groq). Devuelve el texto o None."""
+    cliente = AsyncGroq(api_key=GROQ_API_KEY)
+    try:
+        resultado = await cliente.audio.transcriptions.create(
+            file=("audio.ogg", audio_bytes),
+            model="whisper-large-v3-turbo",
+            language="es",
+        )
+    except Exception as e:
+        print(f"[whisper] Error al transcribir: {e}")
+        return None
+    texto = (resultado.text or "").strip()
+    print(f"[whisper] Transcrito ({len(audio_bytes)} bytes): {texto[:80]}")
+    return texto or None
+
+
 async def generar_tags(texto: str) -> list[str]:
     """Genera 1-3 etiquetas semánticas para clasificar la nota."""
     cliente = AsyncGroq(api_key=GROQ_API_KEY)
