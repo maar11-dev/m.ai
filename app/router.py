@@ -16,6 +16,15 @@ router = APIRouter()
 _procesados: set[str] = set()
 
 
+def _solo_digitos(numero: str) -> str:
+    """Normaliza un número a solo dígitos para comparar (ignora '+', espacios...)."""
+    return "".join(c for c in numero if c.isdigit())
+
+
+# El dueño del bot, normalizado una sola vez al arrancar.
+_MI_NUMERO_NORM = _solo_digitos(MI_NUMERO)
+
+
 @router.get("/")
 async def health_check() -> dict[str, str]:
     return {"status": "activo"}
@@ -54,6 +63,14 @@ async def webhook(request: Request, background_tasks: BackgroundTasks) -> Respon
         print(f"[webhook] Ignorado mensaje tipo '{tipo}'")
         return Response(status_code=200)
 
+    numero_remitente: str = mensaje.get("from", "")
+
+    # Filtro de propietario: solo el dueño del bot puede guardar/consultar/borrar
+    # notas. Si MI_NUMERO no está configurado, no se filtra (no rompemos el bot).
+    if _MI_NUMERO_NORM and _solo_digitos(numero_remitente) != _MI_NUMERO_NORM:
+        print(f"[webhook] Ignorado mensaje de número no autorizado: {numero_remitente}")
+        return Response(status_code=200)
+
     # Anti-duplicado: Meta reenvía el mismo evento si el 200 tarda en llegar.
     msg_id = mensaje.get("id", "")
     if msg_id and msg_id in _procesados:
@@ -63,8 +80,6 @@ async def webhook(request: Request, background_tasks: BackgroundTasks) -> Respon
         if len(_procesados) > 2000:  # cota simple de memoria
             _procesados.clear()
         _procesados.add(msg_id)
-
-    numero_remitente: str = mensaje.get("from", "")
 
     # Respondemos 200 YA y procesamos en segundo plano: así Meta nunca agota el
     # tiempo de espera ni reintenta (evita respuestas/notas duplicadas).
