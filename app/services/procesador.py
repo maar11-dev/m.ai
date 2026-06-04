@@ -1,5 +1,5 @@
 from app.db.vector import borrar_todas_las_notas, guardar_nota
-from app.services.ai import generar_resumen_semanal, gestionar_consulta
+from app.services.ai import generar_resumen_semanal, generar_tags, gestionar_consulta
 from app.services.whatsapp import enviar_mensaje_whatsapp
 
 HELP_TEXT = (
@@ -32,6 +32,10 @@ async def procesar_mensaje(texto: str, numero_remitente: str) -> None:
         await gestionar_consulta(texto[1:].strip(), numero_remitente)
         return
 
-    nota_id = await guardar_nota(texto)
+    tags = await generar_tags(texto)
+    nota_id = await guardar_nota(texto, tags)
     print(f"[webhook] Nota {nota_id} de {numero_remitente}: {texto[:80]}")
-    await enviar_mensaje_whatsapp(numero_remitente, f"✅ Nota guardada: {texto}")
+
+    tags_str = " ".join(f"#{t}" for t in tags) if tags else ""
+    confirmacion = f"✅ Nota guardada {tags_str}\n_{texto}_" if tags_str else f"✅ Nota guardada: {texto}"
+    await enviar_mensaje_whatsapp(numero_remitente, confirmacion)

@@ -10,20 +10,21 @@ from upstash_vector import Index, Vector
 index = Index.from_env()
 
 
-async def guardar_nota(texto: str) -> str:
+async def guardar_nota(texto: str, tags: list[str] | None = None) -> str:
     id_unico = str(uuid.uuid4())
     ahora = time.time()
     metadata = {
         "texto": texto,
         "created_at": ahora,
         "fecha_iso": datetime.fromtimestamp(ahora, timezone.utc).isoformat(),
+        "tags": tags or [],
     }
     # data=texto → el modelo BGE-m3 de Upstash genera el embedding en su backend.
     await asyncio.to_thread(
         index.upsert,
         [Vector(id=id_unico, data=texto, metadata=metadata)],
     )
-    print(f"[upstash] Nota guardada con id {id_unico}")
+    print(f"[upstash] Nota guardada | id: {id_unico} | tags: {tags or []}")
     return id_unico
 
 
@@ -54,8 +55,12 @@ async def obtener_notas_semana(dias: int = 7) -> list[str]:
     return textos
 
 
-async def buscar_notas(pregunta: str, n_resultados: int = 10) -> list[str]:
-    # Pedimos más candidatos de los necesarios para poder re-rankear por recencia.
+async def buscar_notas(
+    pregunta: str,
+    n_resultados: int = 10,
+    tag_boost: str | None = None,
+) -> list[str]:
+    # Pedimos más candidatos de los necesarios para poder re-rankear por recencia y tag.
     candidatos = await asyncio.to_thread(
         index.query,
         data=pregunta,
@@ -65,11 +70,16 @@ async def buscar_notas(pregunta: str, n_resultados: int = 10) -> list[str]:
 
     ahora = time.time()
     HALF_LIFE_SEGUNDOS = 90 * 86400  # 30 días → 0.75×, 90+ días → mínimo 0.50×
+    TAG_BOOST_FACTOR = 1.4  # notas con el tag relevante suben un 40% en el ranking
 
     def puntuacion(r) -> float:
-        created_at = (r.metadata or {}).get("created_at", ahora)
+        md = r.metadata or {}
+        created_at = md.get("created_at", ahora)
         decay = max(1 / (1 + (ahora - created_at) / HALF_LIFE_SEGUNDOS), 0.5)
-        return r.score * decay
+        score = r.score * decay
+        if tag_boost and tag_boost in md.get("tags", []):
+            score *= TAG_BOOST_FACTOR
+        return score
 
     reordenados = sorted(candidatos, key=puntuacion, reverse=True)
     return [
