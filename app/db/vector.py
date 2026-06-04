@@ -3,26 +3,22 @@ import time
 import uuid
 from datetime import datetime, timezone
 
-from dotenv import load_dotenv
 from upstash_vector import Index, Vector
 
-# Carga .env antes de inicializar para que from_env() vea las credenciales,
-# independientemente del orden de importación de los módulos.
-load_dotenv(override=True)
-
-# Cliente global. Lee UPSTASH_VECTOR_REST_URL y UPSTASH_VECTOR_REST_TOKEN del entorno.
+# Index.from_env() lee UPSTASH_VECTOR_REST_URL y UPSTASH_VECTOR_REST_TOKEN.
+# config.py ya llamó a load_dotenv() antes de que este módulo se importe.
 index = Index.from_env()
 
 
 async def guardar_nota(texto: str) -> str:
     id_unico = str(uuid.uuid4())
-    ahora = time.time()  # epoch en segundos, para filtrar por fecha
+    ahora = time.time()
     metadata = {
         "texto": texto,
         "created_at": ahora,
         "fecha_iso": datetime.fromtimestamp(ahora, timezone.utc).isoformat(),
     }
-    # data=texto -> el modelo BGE-m3 de Upstash genera el embedding en su backend.
+    # data=texto → el modelo BGE-m3 de Upstash genera el embedding en su backend.
     await asyncio.to_thread(
         index.upsert,
         [Vector(id=id_unico, data=texto, metadata=metadata)],
