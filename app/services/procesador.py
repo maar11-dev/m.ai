@@ -1,5 +1,12 @@
+import asyncio
+
 from app.db.vector import borrar_todas_las_notas, guardar_nota
-from app.services.ai import generar_resumen_semanal, generar_tags, gestionar_consulta
+from app.services.ai import (
+    extraer_fecha_evento,
+    generar_resumen_semanal,
+    generar_tags,
+    gestionar_consulta,
+)
 from app.services.whatsapp import enviar_mensaje_whatsapp
 
 HELP_TEXT = (
@@ -32,10 +39,12 @@ async def procesar_mensaje(texto: str, numero_remitente: str) -> None:
         await gestionar_consulta(texto[1:].strip(), numero_remitente)
         return
 
-    tags = await generar_tags(texto)
-    nota_id = await guardar_nota(texto, tags)
+    # Tags y fecha de evento en paralelo — una sola ronda de llamadas a Groq.
+    tags, event_date = await asyncio.gather(generar_tags(texto), extraer_fecha_evento(texto))
+    nota_id = await guardar_nota(texto, tags, event_date)
     print(f"[webhook] Nota {nota_id} de {numero_remitente}: {texto[:80]}")
 
     tags_str = " ".join(f"#{t}" for t in tags) if tags else ""
-    confirmacion = f"✅ Nota guardada {tags_str}\n_{texto}_" if tags_str else f"✅ Nota guardada: {texto}"
+    fecha_str = f"\n📅 Recordatorio programado para el {event_date}" if event_date else ""
+    confirmacion = f"✅ Nota guardada {tags_str}{fecha_str}\n_{texto}_" if tags_str else f"✅ Nota guardada{fecha_str}: {texto}"
     await enviar_mensaje_whatsapp(numero_remitente, confirmacion)
