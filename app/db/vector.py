@@ -13,7 +13,6 @@ index = Index.from_env()
 async def guardar_nota(
     texto: str,
     tags: list[str] | None = None,
-    event_date: str | None = None,
 ) -> str:
     id_unico = str(uuid.uuid4())
     ahora = time.time()
@@ -23,14 +22,11 @@ async def guardar_nota(
         "fecha_iso": datetime.fromtimestamp(ahora, timezone.utc).isoformat(),
         "tags": tags or [],
     }
-    if event_date:
-        metadata["event_date"] = event_date
-    # data=texto → el modelo BGE-m3 de Upstash genera el embedding en su backend.
     await asyncio.to_thread(
         index.upsert,
         [Vector(id=id_unico, data=texto, metadata=metadata)],
     )
-    print(f"[upstash] Nota guardada | id: {id_unico} | tags: {tags or []} | event_date: {event_date}")
+    print(f"[upstash] Nota guardada | id: {id_unico} | tags: {tags or []}")
     return id_unico
 
 
@@ -60,26 +56,6 @@ async def obtener_notas_semana(dias: int = 7) -> list[str]:
             break
     return textos
 
-
-async def obtener_notas_con_evento(fecha_objetivo: str) -> list[dict]:
-    """Devuelve notas cuyo event_date coincide con fecha_objetivo (YYYY-MM-DD)."""
-    resultado: list[dict] = []
-    cursor = ""
-    while True:
-        res = await asyncio.to_thread(
-            index.range,
-            cursor=cursor,
-            limit=100,
-            include_metadata=True,
-        )
-        for v in res.vectors:
-            md = v.metadata or {}
-            if md.get("event_date") == fecha_objetivo:
-                resultado.append({"texto": md.get("texto", ""), "event_date": md["event_date"]})
-        cursor = res.next_cursor
-        if not cursor:
-            break
-    return resultado
 
 
 async def buscar_notas(

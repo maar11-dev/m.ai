@@ -1,13 +1,9 @@
-from datetime import date, timedelta
 from typing import Any
 
-from fastapi import APIRouter, BackgroundTasks, HTTPException, Request, Response
+from fastapi import APIRouter, BackgroundTasks, Request, Response
 
-from app.config import CRON_SECRET, MI_NUMERO, VERIFY_TOKEN
-from app.db.vector import obtener_notas_con_evento
-from app.services.ai import generar_resumen_semanal
+from app.config import MI_NUMERO, VERIFY_TOKEN
 from app.services.procesador import procesar_audio, procesar_mensaje
-from app.services.whatsapp import enviar_mensaje_whatsapp
 
 router = APIRouter()
 
@@ -98,50 +94,3 @@ async def webhook(request: Request, background_tasks: BackgroundTasks) -> Respon
     return Response(status_code=200)
 
 
-async def _enviar_resumen_a(numero: str) -> None:
-    resumen = await generar_resumen_semanal()
-    await enviar_mensaje_whatsapp(numero, resumen)
-
-
-async def _enviar_recordatorios() -> None:
-    fecha_objetivo = (date.today() + timedelta(days=2)).isoformat()
-    notas = await obtener_notas_con_evento(fecha_objetivo)
-    if not notas:
-        print(f"[recordatorios] Ninguna nota con event_date={fecha_objetivo}")
-        return
-    for nota in notas:
-        msg = (
-            f"⏰ *Recordatorio* — tienes un evento en 2 días ({nota['event_date']}):\n\n"
-            f"_{nota['texto']}_"
-        )
-        await enviar_mensaje_whatsapp(MI_NUMERO, msg)
-        print(f"[recordatorios] Enviado recordatorio: {nota['texto'][:60]}")
-
-
-@router.post("/tareas/recordatorios")
-async def tarea_recordatorios(
-    request: Request, background_tasks: BackgroundTasks
-) -> dict[str, str]:
-    """Endpoint para el cron diario que detecta eventos próximos y avisa."""
-    if not CRON_SECRET or request.query_params.get("secret") != CRON_SECRET:
-        raise HTTPException(status_code=403, detail="No autorizado")
-    if not MI_NUMERO:
-        raise HTTPException(status_code=500, detail="MI_NUMERO_WHATSAPP no configurado")
-    background_tasks.add_task(_enviar_recordatorios)
-    return {"status": "encolado"}
-
-
-@router.post("/tareas/resumen-semanal")
-async def tarea_resumen_semanal(
-    request: Request, background_tasks: BackgroundTasks
-) -> dict[str, str]:
-    """Endpoint que dispara el cron externo los domingos. Protegido por secreto."""
-    if not CRON_SECRET or request.query_params.get("secret") != CRON_SECRET:
-        raise HTTPException(status_code=403, detail="No autorizado")
-    if not MI_NUMERO:
-        raise HTTPException(status_code=500, detail="MI_NUMERO_WHATSAPP no configurado")
-
-    # Responde al instante y genera el resumen en segundo plano: así el cron
-    # recibe su 200 enseguida y nunca choca con el límite de 30s de timeout.
-    background_tasks.add_task(_enviar_resumen_a, MI_NUMERO)
-    return {"status": "encolado"}

@@ -1,5 +1,3 @@
-from datetime import date
-
 from groq import AsyncGroq
 
 from app.config import GROQ_API_KEY
@@ -67,34 +65,6 @@ async def extraer_tag_consulta(pregunta: str) -> str | None:
     raw = (completion.choices[0].message.content or "").strip().lower()
     return None if raw in ("ninguna", "none", "") else raw
 
-
-async def extraer_fecha_evento(texto: str) -> str | None:
-    """Extrae la fecha de un evento de la nota en formato YYYY-MM-DD, o None si no hay."""
-    cliente = AsyncGroq(api_key=GROQ_API_KEY)
-    completion = await cliente.chat.completions.create(
-        model="llama-3.1-8b-instant",
-        messages=[
-            {
-                "role": "system",
-                "content": (
-                    f"Hoy es {date.today().isoformat()}. "
-                    "Si el texto menciona un evento con fecha específica, devuelve SOLO esa fecha en formato YYYY-MM-DD. "
-                    "Si no hay fecha concreta, devuelve 'ninguna'. "
-                    "Ejemplos: 'médico el 20 de junio' → '2026-06-20' | 'comprar leche' → 'ninguna'"
-                ),
-            },
-            {"role": "user", "content": texto},
-        ],
-        max_tokens=15,
-    )
-    raw = (completion.choices[0].message.content or "").strip()
-    if raw.lower() in ("ninguna", "none", "") or not raw:
-        return None
-    try:
-        date.fromisoformat(raw)
-        return raw
-    except ValueError:
-        return None
 
 
 async def gestionar_consulta(pregunta: str, numero_remitente: str) -> None:
