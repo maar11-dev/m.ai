@@ -69,7 +69,7 @@ async def extraer_tag_consulta(pregunta: str) -> str | None:
 
 async def gestionar_consulta(pregunta: str, numero_remitente: str) -> None:
     tag = await extraer_tag_consulta(pregunta)
-    notas = await buscar_notas(pregunta, tag_boost=tag)
+    notas = await buscar_notas(pregunta, tag_boost=tag, user_id=numero_remitente)
     contexto = "\n".join(f"- {n}" for n in notas) if notas else "(sin notas relevantes)"
 
     system_prompt = (
@@ -93,8 +93,8 @@ async def gestionar_consulta(pregunta: str, numero_remitente: str) -> None:
     await enviar_mensaje_whatsapp(numero_remitente, respuesta)
 
 
-async def generar_resumen_semanal() -> str:
-    notas = await obtener_notas_semana(7)
+async def generar_resumen_semanal(user_id: str = "") -> str:
+    notas = await obtener_notas_semana(7, user_id=user_id)
     if not notas:
         return "📭 No tienes notas de esta semana."
 

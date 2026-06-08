@@ -40,12 +40,12 @@ async def procesar_mensaje(texto: str, numero_remitente: str) -> None:
         return
 
     if texto == "-@":
-        await borrar_todas_las_notas()
+        await borrar_todas_las_notas(user_id=numero_remitente)
         await enviar_mensaje_whatsapp(numero_remitente, "🗑️ Todas las notas han sido borradas.")
         return
 
     if texto == "+rs":
-        resumen = await generar_resumen_semanal()
+        resumen = await generar_resumen_semanal(user_id=numero_remitente)
         await enviar_mensaje_whatsapp(numero_remitente, resumen)
         return
 
@@ -54,7 +54,7 @@ async def procesar_mensaje(texto: str, numero_remitente: str) -> None:
         return
 
     tags = await generar_tags(texto)
-    nota_id = await guardar_nota(texto, tags)
+    nota_id = await guardar_nota(texto, tags, user_id=numero_remitente)
     print(f"[webhook] Nota {nota_id} de {numero_remitente}: {texto[:80]}")
 
     confirmacion = f"✅ Nota guardada: {texto}"

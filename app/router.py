@@ -1,24 +1,15 @@
 from typing import Any
 
-from fastapi import APIRouter, BackgroundTasks, Request, Response
+from fastapi import APIRouter, BackgroundTasks, HTTPException, Request, Response
 
-from app.config import MI_NUMERO, VERIFY_TOKEN
 from app.services.procesador import procesar_audio, procesar_mensaje
+from app.config import VERIFY_TOKEN
 
 router = APIRouter()
 
 # IDs de mensajes ya procesados, para ignorar reenvíos de Meta (entrega "al
 # menos una vez"). En memoria: basta para una instancia; se vacía al reiniciar.
 _procesados: set[str] = set()
-
-
-def _solo_digitos(numero: str) -> str:
-    """Normaliza un número a solo dígitos para comparar (ignora '+', espacios...)."""
-    return "".join(c for c in numero if c.isdigit())
-
-
-# El dueño del bot, normalizado una sola vez al arrancar.
-_MI_NUMERO_NORM = _solo_digitos(MI_NUMERO)
 
 
 @router.get("/")
@@ -60,12 +51,6 @@ async def webhook(request: Request, background_tasks: BackgroundTasks) -> Respon
         return Response(status_code=200)
 
     numero_remitente: str = mensaje.get("from", "")
-
-    # Filtro de propietario: solo el dueño del bot puede guardar/consultar/borrar
-    # notas. Si MI_NUMERO no está configurado, no se filtra (no rompemos el bot).
-    if _MI_NUMERO_NORM and _solo_digitos(numero_remitente) != _MI_NUMERO_NORM:
-        print(f"[webhook] Ignorado mensaje de número no autorizado: {numero_remitente}")
-        return Response(status_code=200)
 
     # Anti-duplicado: Meta reenvía el mismo evento si el 200 tarda en llegar.
     msg_id = mensaje.get("id", "")
