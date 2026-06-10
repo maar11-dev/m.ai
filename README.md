@@ -1,12 +1,12 @@
 # m.ai
 
-Bot de WhatsApp que actúa como gestor de conocimiento personal con IA y RAG. Recibe mensajes de texto, los almacena en una base de datos vectorial y permite consultarlos con lenguaje natural.
+Bot de WhatsApp que actúa como gestor de conocimiento personal con IA y RAG. Recibe texto, notas de voz e imágenes, los almacena en una base de datos vectorial y permite consultarlos con lenguaje natural.
 
 ## Stack
 
 - **Python 3** · **FastAPI** · **Uvicorn** · **httpx**
 - **Upstash Vector** — base de datos vectorial (embeddings BGE-m3)
-- **Groq API** — LLM (`llama-3.1-8b-instant`) para consultas RAG y resúmenes
+- **Groq API** — LLM (`llama-3.1-8b-instant`) para consultas RAG y resúmenes, Whisper (`whisper-large-v3-turbo`) para transcribir notas de voz y visión (`llama-4-scout`) para describir imágenes
 - **WhatsApp Cloud API (Meta)** — canal de entrada/salida
 
 ## Variables de entorno (`.env`)
@@ -50,6 +50,8 @@ Para exponer el webhook a Meta en desarrollo, usar Cloudflare Tunnel:
 | Mensaje | Acción |
 |---------|--------|
 | Texto normal | Guarda la nota en Upstash Vector |
+| 🎤 Nota de voz | Transcribe con Whisper y la guarda como nota |
+| 📷 Imagen | La describe con visión IA y guarda la descripción como nota |
 | `? <pregunta>` | Consulta RAG: busca notas relevantes y responde con IA |
 | `+rs` | Genera un resumen inteligente de las notas de los últimos 7 días |
 | `-@` | Borra todas las notas del índice vectorial |
@@ -63,6 +65,12 @@ WhatsApp (usuario)
         └─► POST /webhook
               ├─► [texto normal] Upstash Vector (guardar embedding)
               │                       └─► WhatsApp (confirmación ✅)
+              │
+              ├─► [🎤 voz]       Groq Whisper (transcripción)
+              │                       └─► Upstash Vector (guardar) ─► WhatsApp ✅
+              │
+              ├─► [📷 imagen]    Groq Visión (descripción)
+              │                       └─► Upstash Vector (guardar) ─► WhatsApp ✅
               │
               ├─► [? pregunta]   Upstash Vector (búsqueda semántica)
               │                       └─► Groq LLM (respuesta RAG)
