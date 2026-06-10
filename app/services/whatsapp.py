@@ -26,8 +26,8 @@ async def enviar_mensaje_whatsapp(numero_destino: str, texto: str) -> None:
         print(f"[whatsapp] Error al enviar mensaje: {e}")
 
 
-async def descargar_audio(media_id: str) -> bytes | None:
-    """Descarga un audio de la API de WhatsApp (media_id → URL temporal → binario)."""
+async def descargar_media(media_id: str) -> bytes | None:
+    """Descarga cualquier media de la API de WhatsApp (media_id → URL temporal → binario)."""
     headers = {"Authorization": f"Bearer {ACCESS_TOKEN}"}
     try:
         async with httpx.AsyncClient() as client:
@@ -42,11 +42,11 @@ async def descargar_audio(media_id: str) -> bytes | None:
                 print(f"[whatsapp] Respuesta sin 'url' para media {media_id}")
                 return None
             # La descarga del binario requiere el mismo Bearer token.
-            audio = await client.get(url, headers=headers)
-            if audio.status_code != 200:
-                print(f"[whatsapp] Error descargando audio {media_id}: HTTP {audio.status_code}")
+            media = await client.get(url, headers=headers)
+            if media.status_code != 200:
+                print(f"[whatsapp] Error descargando media {media_id}: HTTP {media.status_code}")
                 return None
-            return audio.content
+            return media.content
     except Exception as e:
-        print(f"[whatsapp] Error al descargar audio: {e}")
+        print(f"[whatsapp] Error al descargar media: {e}")
         return None

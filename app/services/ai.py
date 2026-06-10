@@ -1,3 +1,5 @@
+import base64
+
 from groq import AsyncGroq
 
 from app.config import GROQ_API_KEY
@@ -20,6 +22,42 @@ async def transcribir_audio(audio_bytes: bytes) -> str | None:
     texto = (resultado.text or "").strip()
     print(f"[whisper] Transcrito ({len(audio_bytes)} bytes): {texto[:80]}")
     return texto or None
+
+
+async def describir_imagen(imagen_bytes: bytes, mime_type: str, caption: str = "") -> str | None:
+    """Describe una imagen con el modelo de visión de Groq. Devuelve el texto o None."""
+    cliente = AsyncGroq(api_key=GROQ_API_KEY)
+    b64 = base64.b64encode(imagen_bytes).decode()
+    instruccion = (
+        "Describe esta imagen en español en 1-3 frases concisas para guardarla como nota personal. "
+        "Si contiene texto legible (cartel, ticket, documento, captura), transcríbelo o resume su contenido. "
+        "Devuelve SOLO la descripción, sin preámbulos."
+    )
+    if caption:
+        instruccion += f" El usuario añadió este comentario a la imagen: '{caption}'."
+    try:
+        completion = await cliente.chat.completions.create(
+            model="meta-llama/llama-4-scout-17b-16e-instruct",
+            messages=[
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": instruccion},
+                        {
+                            "type": "image_url",
+                            "image_url": {"url": f"data:{mime_type};base64,{b64}"},
+                        },
+                    ],
+                }
+            ],
+            max_tokens=300,
+        )
+    except Exception as e:
+        print(f"[vision] Error al describir imagen: {e}")
+        return None
+    descripcion = (completion.choices[0].message.content or "").strip()
+    print(f"[vision] Imagen ({len(imagen_bytes)} bytes): {descripcion[:80]}")
+    return descripcion or None
 
 
 async def generar_tags(texto: str) -> list[str]:

@@ -2,7 +2,7 @@ from typing import Any
 
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Request, Response
 
-from app.services.procesador import procesar_audio, procesar_mensaje
+from app.services.procesador import procesar_audio, procesar_imagen, procesar_mensaje
 from app.config import VERIFY_TOKEN
 
 router = APIRouter()
@@ -42,11 +42,11 @@ async def webhook(request: Request, background_tasks: BackgroundTasks) -> Respon
 
     mensaje = mensajes[0]
 
-    # Solo procesamos texto y notas de voz. Reacciones, imágenes, stickers,
+    # Solo procesamos texto, notas de voz e imágenes. Reacciones, stickers,
     # ubicaciones, etc. llegan por este mismo array y NO son notas que escribió
     # el usuario: se ignoran (antes el fallback guardaba el evento crudo).
     tipo = mensaje.get("type")
-    if tipo not in ("text", "audio"):
+    if tipo not in ("text", "audio", "image"):
         print(f"[webhook] Ignorado mensaje tipo '{tipo}'")
         return Response(status_code=200)
 
@@ -69,6 +69,16 @@ async def webhook(request: Request, background_tasks: BackgroundTasks) -> Respon
         if not media_id:
             return Response(status_code=200)
         background_tasks.add_task(procesar_audio, media_id, numero_remitente)
+        return Response(status_code=200)
+
+    if tipo == "image":
+        imagen = mensaje.get("image", {})
+        media_id = imagen.get("id", "")
+        if not media_id:
+            return Response(status_code=200)
+        mime_type = imagen.get("mime_type", "image/jpeg")
+        caption = (imagen.get("caption") or "").strip()
+        background_tasks.add_task(procesar_imagen, media_id, mime_type, caption, numero_remitente)
         return Response(status_code=200)
 
     texto: str = (mensaje.get("text", {}).get("body") or "").strip()
