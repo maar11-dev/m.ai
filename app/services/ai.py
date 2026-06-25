@@ -51,6 +51,7 @@ async def describir_imagen(imagen_bytes: bytes, mime_type: str, caption: str = "
                 }
             ],
             max_tokens=300,
+            reasoning_effort="none",
         )
     except Exception as e:
         print(f"[vision] Error al describir imagen: {e}")
