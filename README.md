@@ -6,7 +6,7 @@ Bot de WhatsApp que actúa como gestor de conocimiento personal con IA y RAG. Re
 
 - **Python 3** · **FastAPI** · **Uvicorn** · **httpx**
 - **Upstash Vector** — base de datos vectorial (embeddings BGE-m3)
-- **Groq API** — LLM (`llama-3.1-8b-instant`) para consultas RAG y resúmenes, Whisper (`whisper-large-v3-turbo`) para transcribir notas de voz y visión (`llama-4-scout`) para describir imágenes
+- **Groq API** — LLM (`llama-3.1-8b-instant`) para consultas RAG y resúmenes, Whisper (`whisper-large-v3-turbo`) para transcribir notas de voz y visión (`qwen3.6-27b`) para describir imágenes
 - **WhatsApp Cloud API (Meta)** — canal de entrada/salida
 
 ## Variables de entorno (`.env`)

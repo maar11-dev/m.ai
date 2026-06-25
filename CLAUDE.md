@@ -36,7 +36,7 @@ app/
 |---------|--------|
 | Cualquier texto | Genera tags (Groq) y guarda nota en Upstash |
 | 🎤 Nota de voz | Transcribe (Whisper) y procesa como texto |
-| 📷 Imagen | Describe con visión (Llama 4 Scout) y guarda como nota |
+| 📷 Imagen | Describe con visión (Qwen3.6-27b) y guarda como nota |
 | `? <pregunta>` | Búsqueda RAG semántica sobre las notas del usuario |
 | `+rs` | Resumen semanal de los últimos 7 días |
 | `-@` | Borra todas las notas del usuario |

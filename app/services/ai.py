@@ -37,7 +37,7 @@ async def describir_imagen(imagen_bytes: bytes, mime_type: str, caption: str = "
         instruccion += f" El usuario añadió este comentario a la imagen: '{caption}'."
     try:
         completion = await cliente.chat.completions.create(
-            model="meta-llama/llama-4-scout-17b-16e-instruct",
+            model="qwen/qwen3.6-27b",
             messages=[
                 {
                     "role": "user",
