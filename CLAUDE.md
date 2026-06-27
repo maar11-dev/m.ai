@@ -7,7 +7,7 @@ El objetivo es seguir añadiendo IA agéntica y mejorar las capacidades de búsq
 - **Lenguaje:** Python 3.12
 - **Backend/API:** FastAPI + Uvicorn (ASGI)
 - **Base de datos:** Upstash Vector (embeddings BGE-m3, REST API) — sin SQLite
-- **LLM / Transcripción:** Groq API (`llama-3.1-8b-instant`, `whisper-large-v3-turbo`)
+- **LLM / Transcripción:** Groq API (`openai/gpt-oss-20b`, `whisper-large-v3-turbo`)
 - **Mensajería:** Meta WhatsApp Cloud API v17.0
 - **Despliegue:** Render.com (plan free, región Frankfurt)
 - **Entorno local:** Windows (PowerShell)

@@ -6,6 +6,8 @@ from app.config import GROQ_API_KEY
 from app.db.vector import buscar_notas, obtener_notas_semana
 from app.services.whatsapp import enviar_mensaje_whatsapp
 
+MODELO_LLM = "openai/gpt-oss-20b"
+
 
 async def transcribir_audio(audio_bytes: bytes) -> str | None:
     """Transcribe una nota de voz a texto con Whisper (Groq). Devuelve el texto o None."""
@@ -65,7 +67,7 @@ async def generar_tags(texto: str) -> list[str]:
     """Genera 1-3 etiquetas semánticas para clasificar la nota."""
     cliente = AsyncGroq(api_key=GROQ_API_KEY)
     completion = await cliente.chat.completions.create(
-        model="llama-3.1-8b-instant",
+        model=MODELO_LLM,
         messages=[
             {
                 "role": "system",
@@ -77,7 +79,8 @@ async def generar_tags(texto: str) -> list[str]:
             },
             {"role": "user", "content": texto},
         ],
-        max_tokens=20,
+        max_tokens=256,
+        reasoning_effort="low",
     )
     raw = completion.choices[0].message.content or ""
     return [t.strip().lower() for t in raw.split(",") if t.strip()][:3]
@@ -87,7 +90,7 @@ async def extraer_tag_consulta(pregunta: str) -> str | None:
     """Extrae la etiqueta más relevante de una pregunta, si la hay."""
     cliente = AsyncGroq(api_key=GROQ_API_KEY)
     completion = await cliente.chat.completions.create(
-        model="llama-3.1-8b-instant",
+        model=MODELO_LLM,
         messages=[
             {
                 "role": "system",
@@ -99,7 +102,8 @@ async def extraer_tag_consulta(pregunta: str) -> str | None:
             },
             {"role": "user", "content": pregunta},
         ],
-        max_tokens=10,
+        max_tokens=256,
+        reasoning_effort="low",
     )
     raw = (completion.choices[0].message.content or "").strip().lower()
     return None if raw in ("ninguna", "none", "") else raw
@@ -121,11 +125,12 @@ async def gestionar_consulta(pregunta: str, numero_remitente: str) -> None:
 
     cliente = AsyncGroq(api_key=GROQ_API_KEY)
     completion = await cliente.chat.completions.create(
-        model="llama-3.1-8b-instant",
+        model=MODELO_LLM,
         messages=[
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": pregunta},
         ],
+        reasoning_effort="low",
     )
     respuesta = completion.choices[0].message.content or "No se pudo generar respuesta."
     print(f"[rag] Consulta: {pregunta[:60]} | tag: {tag} | contexto: {len(notas)} notas")
@@ -146,11 +151,12 @@ async def generar_resumen_semanal(user_id: str = "") -> str:
     )
     cliente = AsyncGroq(api_key=GROQ_API_KEY)
     completion = await cliente.chat.completions.create(
-        model="llama-3.1-8b-instant",
+        model=MODELO_LLM,
         messages=[
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": f"Mis notas de esta semana:\n{listado}"},
         ],
+        reasoning_effort="low",
     )
     cuerpo = completion.choices[0].message.content or "No se pudo generar el resumen."
     print(f"[resumen] Generado a partir de {len(notas)} notas")
